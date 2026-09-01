@@ -37,6 +37,7 @@ def load_sent_ids():
 
 
 def save_sent_ids(ids):
+    # เขียนไฟล์นี้ทุกครั้งที่รัน (แม้ไม่มีข่าวใหม่) เพื่อให้ workflow commit ได้เสมอ
     trimmed = list(ids)[-MAX_STORED_IDS:]
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(trimmed, f)
@@ -64,6 +65,7 @@ def main():
         news = get_fresh_news()
     except Exception as exc:
         print(f"[warn] ดึงข่าวไม่ได้รอบนี้: {exc}")
+        save_sent_ids(sent_ids)
         return
 
     new_items = []
@@ -81,6 +83,7 @@ def main():
 
     if not new_items:
         print("ไม่มีข่าวใหม่รอบนี้")
+        save_sent_ids(sent_ids)
         return
 
     for n in reversed(new_items):
