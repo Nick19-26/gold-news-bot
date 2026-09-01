@@ -1,0 +1,28 @@
+name: Gold News Bot
+
+on:
+  schedule:
+    # เวลาทั้งหมดเป็น UTC — ไทยคือ UTC+7
+    - cron: "0 0 * * *"   # 07:00 น. ไทย (เช้า)
+    - cron: "0 11 * * *"  # 18:00 น. ไทย (ก่อนเข้า NY Kill Zone)
+  workflow_dispatch: {}    # กดรันมือได้เองจากแท็บ Actions
+
+jobs:
+  send-news:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run gold news bot
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python gold_news_bot.py
