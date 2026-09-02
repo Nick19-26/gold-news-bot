@@ -2,7 +2,8 @@
 Gold Breaking News Alert
 =========================
 รันถี่ (ทุก 5 นาที ตาม workflow) เช็คข่าวใหม่ที่เกี่ยวกับทองคำจาก Finnhub
-ส่งเฉพาะข่าว "ใหม่" ที่ยังไม่เคยส่งเข้า Telegram ทันที (กันส่งซ้ำด้วยไฟล์ sent_ids.json)
+ส่งเฉพาะข่าว "ใหม่" ที่ยังไม่เคยส่ง พร้อมคำอธิบายว่าทำไมสำคัญกับทองคำ (ไม่ใช้ AI, ฟรี 100%)
+กันส่งซ้ำด้วยไฟล์ sent_ids.json
 """
 
 import json
@@ -17,13 +18,39 @@ TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
 
 STATE_FILE = "sent_ids.json"
 MAX_STORED_IDS = 500
-LOOKBACK_MINUTES = 60  # กันข่าวเก่าถูกส่งรัวๆ ตอนรันครั้งแรก
+LOOKBACK_MINUTES = 60
 
-KEYWORDS = [
-    "gold", "xau", "fed", "fomc", "dollar", "inflation", "cpi", "ppi",
-    "interest rate", "rate cut", "rate hike", "nonfarm", "payroll",
-    "jobless", "treasury yield", "recession", "geopolit", "safe haven",
+CATEGORY_RULES = [
+    (["fomc", "fed", "interest rate", "rate cut", "rate hike"],
+     "🏦 ดอกเบี้ย / ท่าที Fed",
+     "ลดดอกเบี้ย/ท่าทีผ่อนคลาย → ดอลลาร์อ่อน มักหนุนทองขึ้น | ขึ้นดอกเบี้ย/ท่าทีเข้มงวด → มักกดดันทองลง"),
+    (["cpi", "ppi", "inflation"],
+     "📈 เงินเฟ้อ",
+     "เงินเฟ้อสูงกว่าคาด → ตลาดกลัว Fed คงดอกเบี้ยสูงต่อ กดดันทอง | ต่ำกว่าคาด → มักหนุนทองขึ้น"),
+    (["nonfarm", "payroll", "jobless"],
+     "👷 ตลาดแรงงานสหรัฐฯ",
+     "จ้างงานแข็งแกร่ง → เศรษฐกิจแข็งแรง มักกดดันทอง | จ้างงานอ่อนแอ → มักหนุนทองขึ้น"),
+    (["treasury yield"],
+     "💵 ผลตอบแทนพันธบัตรสหรัฐฯ",
+     "ผลตอบแทนพันธบัตรขึ้น → แย่งความน่าสนใจจากทอง มักกดดันทอง | ลง → มักหนุนทอง"),
+    (["dollar"],
+     "💲 ค่าเงินดอลลาร์",
+     "ทองคำเทรดเป็นดอลลาร์ ดอลลาร์แข็ง → ทองมักอ่อนตัว | ดอลลาร์อ่อน → ทองมักแข็งตัว"),
+    (["geopolit", "recession", "safe haven"],
+     "🛡️ ความเสี่ยง / สินทรัพย์ปลอดภัย",
+     "ความไม่แน่นอนทางเศรษฐกิจ-การเมืองสูง → เงินมักไหลเข้าทองคำในฐานะสินทรัพย์ปลอดภัย"),
 ]
+DEFAULT_LABEL = "🟡 ข่าวทองคำโดยตรง"
+DEFAULT_EXPLANATION = "ข่าวที่พูดถึงทองคำ/XAU โดยตรง ควรติดตามปฏิกิริยาราคาต่อ"
+
+KEYWORDS = [kw for rule in CATEGORY_RULES for kw in rule[0]] + ["gold", "xau"]
+
+
+def categorize(headline_lower):
+    for kws, label, explanation in CATEGORY_RULES:
+        if any(kw in headline_lower for kw in kws):
+            return label, explanation
+    return DEFAULT_LABEL, DEFAULT_EXPLANATION
 
 
 def load_sent_ids():
@@ -37,7 +64,6 @@ def load_sent_ids():
 
 
 def save_sent_ids(ids):
-    # เขียนไฟล์นี้ทุกครั้งที่รัน (แม้ไม่มีข่าวใหม่) เพื่อให้ workflow commit ได้เสมอ
     trimmed = list(ids)[-MAX_STORED_IDS:]
     with open(STATE_FILE, "w", encoding="utf-8") as f:
         json.dump(trimmed, f)
@@ -89,8 +115,14 @@ def main():
     for n in reversed(new_items):
         headline = n.get("headline", "")
         src = n.get("source", "")
-        link = n.get("url", "")
-        text = f"🚨 ข่าวด่วนทองคำ\n{headline} ({src})\n{link}"
+        label, explanation = categorize(headline.lower())
+        text = (
+            f"🚨 ข่าวด่วนทองคำ\n"
+            f"{label}\n"
+            f"{headline}\n"
+            f"(ที่มา: {src})\n"
+            f"💡 ทำไมสำคัญ: {explanation}"
+        )
         send_telegram(text)
         sent_ids.add(n.get("id"))
 
